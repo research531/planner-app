@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Персональный планировщик</title>
+  <meta name="theme-color" content="#1A1A1A" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="stylesheet" href="./css/base.css" />
+  <link rel="stylesheet" href="./css/components.css" />
+  <link rel="stylesheet" href="./css/themes.css" />
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="logo">📘 Планировщик</div>
+      <nav>
+        <a href="#inbox" data-view="inbox">📥 Входящие</a>
+        <a href="#calendar" data-view="calendar">📅 Календарь</a>
+        <a href="#gantt" data-view="gantt">📊 Гант</a>
+        <a href="#areas" data-view="areas">🌐 Области</a>
+        <a href="#time-limits" data-view="time-limits">⏱️ Ограничения</a>
+        <a href="#settings" data-view="settings">⚙️ Настройки</a>
+      </nav>
+      <div class="sidebar-footer">
+        <span id="net-status">Онлайн</span>
+        <span id="sync-status">Синхронизировано</span>
+      </div>
+    </aside>
+
+    <main id="main">
+      <header id="topbar">
+        <button id="mobile-menu-btn">☰</button>
+        <h1 id="view-title">Планировщик</h1>
+        <div class="topbar-actions">
+          <button id="theme-toggle">🌓</button>
+        </div>
+      </header>
+      <section id="view-root"></section>
+    </main>
+
+    <nav id="mobile-tabbar">
+      <a href="#inbox">📥</a>
+      <a href="#calendar">📅</a>
+      <a href="#gantt">📊</a>
+      <a href="#areas">🌐</a>
+      <a href="#settings">⚙️</a>
+    </nav>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <script src="./js/state.js"></script>
+  <script src="./js/db.js"></script>
+  <script src="./js/api.js"></script>
+  <script src="./js/parser.js"></script>
+  <script src="./js/srs.js"></script>
+  <script src="./js/router.js"></script>
+  <script>
+    async function bootstrap() {
+      await DB.init();
+      await State.init();
+      await Router.init();
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js');
+      }
+
+      window.addEventListener('online', async () => {
+        document.body.classList.remove('is-offline');
+        document.getElementById('net-status').textContent = 'Онлайн';
+        await DB.flushQueue();
+      });
+
+      window.addEventListener('offline', () => {
+        document.body.classList.add('is-offline');
+        document.getElementById('net-status').textContent = 'Офлайн';
+      });
+
+      document.getElementById('theme-toggle').addEventListener('click', () => {
+        const next = State.get('settings.theme') === 'dark' ? 'light' : 'dark';
+        State.updateSettings({ theme: next });
+      });
+    }
+    bootstrap();
+  </script>
+</body>
+</html>
