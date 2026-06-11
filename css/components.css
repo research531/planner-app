@@ -1,0 +1,20 @@
+.kanban-list{display:flex;flex-direction:column;gap:10px}
+.task-card{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface)}
+.task-title{font-weight:700}
+.task-meta{font-size:12px;color:var(--muted);margin-top:6px}
+
+.calendar-toolbar,.gantt-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.calendar-grid.month{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.calendar-day{min-height:120px;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--surface)}
+.calendar-day-head{font-size:12px;color:var(--muted);margin-bottom:8px}
+.calendar-item{padding:6px 8px;border-radius:8px;font-size:12px;margin-bottom:6px;cursor:pointer}
+
+.gantt-table{overflow:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.gantt-row{display:grid;grid-template-columns:260px 1fr;min-height:40px;border-bottom:1px solid var(--border)}
+.gantt-left{padding:10px;border-right:1px solid var(--border)}
+.gantt-right{position:relative;min-width:900px}
+.gantt-bar{position:absolute;height:18px;top:10px;border-radius:999px;padding:0 8px;font-size:11px;display:flex;align-items:center;white-space:nowrap}
+
+.area-tile{padding:14px;border-radius:14px}
+.tree-node{padding-left:12px;border-left:2px solid var(--border);margin-left:6px}
+.srs-actions{display:flex;gap:8px;flex-wrap:wrap}

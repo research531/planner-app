@@ -1,0 +1,8 @@
+body.theme-dark{
+  --bg:#1A1A1A;
+  --surface:#252525;
+  --sidebar:#1F1F1F;
+  --text:#F0F0EE;
+  --muted:#666662;
+  --border:#373737;
+}
