@@ -1,0 +1,149 @@
+<div class="page-title">⏱️ Временные ограничения</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <div class="section-title">Базовое расписание</div>
+    <table class="table" id="base-table">
+      <thead>
+        <tr>
+          <th>День</th>
+          <th>Сон</th>
+          <th>Дорога</th>
+          <th>Обед</th>
+          <th>Спорт</th>
+          <th>Рутина</th>
+          <th>Другое</th>
+          <th>Свободно</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="row" style="margin-top:12px">
+      <button class="btn-primary" id="save-base">Сохранить и пересчитать</button>
+      <button class="btn-secondary" id="reset-base">Отменить изменения</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Исключения</div>
+    <div class="col">
+      <div class="grid grid-2">
+        <div><label>Дата начала</label><input type="date" id="ex-start" /></div>
+        <div><label>Дата конца</label><input type="date" id="ex-end" /></div>
+      </div>
+      <div class="grid grid-2">
+        <div><label>Категория</label>
+          <select id="ex-category">
+            <option value="sleep">Сон</option>
+            <option value="commute">Дорога</option>
+            <option value="lunch">Обед</option>
+            <option value="sport">Спорт</option>
+            <option value="routine">Рутина</option>
+            <option value="other">Другое</option>
+          </select>
+        </div>
+        <div><label>Часы</label><input type="number" id="ex-hours" min="0" max="24" /></div>
+      </div>
+      <div><label>Метка</label><input id="ex-label" placeholder="Сессия / отпуск / командировка" /></div>
+      <div class="row">
+        <button class="btn-primary" id="save-ex">Сохранить и пересчитать</button>
+        <button class="btn-secondary" id="cancel-ex-today">Отменить с сегодня</button>
+      </div>
+      <div id="exceptions-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const days = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  const cats = ['sleep','commute','lunch','sport','routine','other'];
+
+  function renderBase() {
+    const tbody = document.querySelector('#base-table tbody');
+    tbody.innerHTML = days.map((label, i) => {
+      const dow = i + 1;
+      const rows = State.get('timeBase').filter(r => Number(r.day_of_week) === dow);
+      const map = Object.fromEntries(cats.map(c => [c, 0]));
+      rows.forEach(r => map[r.category] = Number(r.hours || 0));
+      const free = 24 - cats.reduce((s, c) => s + Number(map[c] || 0), 0);
+
+      return `
+        <tr data-dow="${dow}">
+          <td>${label}</td>
+          ${cats.map(c => `<td><input type="number" min="0" max="24" step="0.5" data-cat="${c}" value="${map[c]}"></td>`).join('')}
+          <td>${free}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function renderExceptions() {
+    const list = State.get('timeExceptions');
+    document.getElementById('exceptions-list').innerHTML = list.length
+      ? list.map(ex => `
+          <div class="task-card">
+            <div class="task-title">${ex.label || ex.category}</div>
+            <div class="task-meta">${ex.date_start} → ${ex.date_end} · ${ex.hours}ч</div>
+          </div>
+        `).join('')
+      : '<div class="muted">Исключений нет</div>';
+  }
+
+  document.getElementById('save-base').onclick = async () => {
+    const rows = [...document.querySelectorAll('#base-table tbody tr')];
+    for (const row of rows) {
+      const dow = Number(row.dataset.dow);
+      for (const input of row.querySelectorAll('input')) {
+        const record = {
+          id: crypto.randomUUID(),
+          day_of_week: dow,
+          category: input.dataset.cat,
+          hours: Number(input.value || 0),
+          label: input.dataset.cat,
+          valid_from: new Date().toISOString().slice(0, 10),
+          tech_status: 'A'
+        };
+        await API.saveTimeBase(record);
+      }
+    }
+    await API.post('recalculatePlan', {});
+    alert('База времени сохранена');
+  };
+
+  document.getElementById('save-ex').onclick = async () => {
+    const record = {
+      id: crypto.randomUUID(),
+      date_start: document.getElementById('ex-start').value,
+      date_end: document.getElementById('ex-end').value,
+      day_of_week: '',
+      category: document.getElementById('ex-category').value,
+      hours: Number(document.getElementById('ex-hours').value || 0),
+      label: document.getElementById('ex-label').value,
+      created_at: new Date().toISOString(),
+      cancelled_from: '',
+      tech_status: 'A'
+    };
+    await API.saveTimeException(record);
+    await API.post('recalculatePlan', {});
+    renderExceptions();
+  };
+
+  document.getElementById('cancel-ex-today').onclick = async () => {
+    const all = State.get('timeExceptions');
+    for (const ex of all) {
+      await API.saveTimeException({
+        ...ex,
+        prev_id: ex.id,
+        id: crypto.randomUUID(),
+        cancelled_from: new Date().toISOString().slice(0, 10),
+        tech_status: 'A'
+      });
+    }
+    renderExceptions();
+  };
+
+  renderBase();
+  renderExceptions();
+})();
+</script>

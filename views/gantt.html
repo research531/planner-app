@@ -1,0 +1,73 @@
+<div class="page-title">📊 Гант</div>
+
+<div class="card">
+  <div class="gantt-toolbar">
+    <label><input type="checkbox" class="area-filter" checked value="all" /> Все области</label>
+    <select id="gantt-scale">
+      <option value="90">Квартал</option>
+      <option value="180">Полгода</option>
+      <option value="365">Год</option>
+    </select>
+  </div>
+  <div id="gantt-root" class="gantt-table"></div>
+</div>
+
+<script>
+(() => {
+  function areaName(id) {
+    return State.get('areas').find(a => a.id === id)?.name || 'Без области';
+  }
+
+  function colorByArea(id) {
+    return State.get('areas').find(a => a.id === id)?.color || '#E8E8E8';
+  }
+
+  function diffDays(a, b) {
+    return Math.round((new Date(b) - new Date(a)) / 86400000);
+  }
+
+  function render() {
+    const scale = Number(document.getElementById('gantt-scale').value || 90);
+    const start = new Date();
+    const tasks = State.get('tasks').filter(t => t.status !== 'cancelled' && t.date_deadline);
+    const areas = State.get('areas');
+
+    let html = '';
+    for (const area of areas) {
+      const areaTasks = tasks.filter(t => t.area_id === area.id);
+      if (!areaTasks.length) continue;
+
+      html += `
+        <div class="gantt-row">
+          <div class="gantt-left"><b>${area.icon || '🌐'} ${area.name}</b></div>
+          <div class="gantt-right"></div>
+        </div>
+      `;
+
+      for (const task of areaTasks) {
+        const planned = task.date_planned || new Date().toISOString().slice(0,10);
+        const deadline = task.date_deadline;
+        const left = Math.max(0, diffDays(start, planned)) * 8;
+        const width = Math.max(16, (diffDays(planned, deadline) + 1) * 8);
+
+        html += `
+          <div class="gantt-row">
+            <div class="gantt-left">${task.title}</div>
+            <div class="gantt-right">
+              <div class="gantt-bar" style="left:${left}px;width:${width}px;background:${colorByArea(task.area_id)}">
+                ${task.title}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    if (!html) html = '<div class="card">Нет данных для диаграммы Ганта</div>';
+    document.getElementById('gantt-root').innerHTML = html;
+  }
+
+  document.getElementById('gantt-scale').onchange = render;
+  render();
+})();
+</script>

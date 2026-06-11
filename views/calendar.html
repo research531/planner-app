@@ -1,0 +1,140 @@
+<div class="page-title">📅 Календарь</div>
+
+<div class="card">
+  <div class="calendar-toolbar">
+    <button class="btn-secondary" id="mode-day">День</button>
+    <button class="btn-secondary" id="mode-week">Неделя</button>
+    <button class="btn-primary" id="mode-month">Месяц</button>
+    <input type="month" id="calendar-month" />
+  </div>
+  <div id="calendar-root"></div>
+</div>
+
+<script>
+(() => {
+  let mode = 'month';
+  let current = new Date();
+
+  function areaColor(id) {
+    const area = State.get('areas').find(a => a.id === id);
+    return area?.color || '#E8E8E8';
+  }
+
+  function tasksForDate(dateStr) {
+    const tasks = State.get('tasks').filter(t => t.date_planned === dateStr && t.tech_status === 'A');
+    const reps = State.get('repetitions')
+      .filter(r => r.next_review === dateStr && r.tech_status === 'A')
+      .map(r => {
+        const task = State.get('tasks').find(t => t.id === r.task_id);
+        return {
+          id: r.id,
+          area_id: task?.area_id || '',
+          title: `🧠 ${task?.title || 'Повторение'}`,
+          estimated_hours: 0,
+          isReview: true
+        };
+      });
+    return [...tasks, ...reps];
+  }
+
+  function openTaskModal(item) {
+    const html = `
+      <div class="card">
+        <div class="section-title">${item.title}</div>
+        ${item.isReview ? `
+          <div class="srs-actions">
+            <button class="btn-primary" data-grade="easy">Вспомнил легко</button>
+            <button class="btn-secondary" data-grade="hard">С трудом</button>
+            <button class="btn-danger" data-grade="fail">Не вспомнил</button>
+            <button class="btn-ghost" data-grade="later">Позже сегодня</button>
+            <button class="btn-ghost" data-grade="tomorrow">На завтра</button>
+          </div>
+        ` : `
+          <div class="col">
+            <div><b>Часы:</b> ${item.estimated_hours}</div>
+            <div><b>Дедлайн:</b> ${item.date_deadline || '—'}</div>
+            <div><b>Приоритет:</b> ${item.priority}</div>
+          </div>
+        `}
+      </div>
+    `;
+    document.getElementById('modal-root').innerHTML = html;
+
+    document.querySelectorAll('[data-grade]').forEach(btn => {
+      btn.onclick = async () => {
+        const rep = State.get('repetitions').find(r => r.id === item.id);
+        if (!rep) return;
+        let updated;
+        if (btn.dataset.grade === 'later') {
+          updated = { ...rep, prev_id: rep.id, id: crypto.randomUUID(), next_review: new Date().toISOString().slice(0, 10), tech_status: 'A' };
+        } else if (btn.dataset.grade === 'tomorrow') {
+          const d = new Date(); d.setDate(d.getDate() + 1);
+          updated = { ...rep, prev_id: rep.id, id: crypto.randomUUID(), next_review: d.toISOString().slice(0, 10), tech_status: 'A' };
+        } else {
+          updated = SRS.review(rep, btn.dataset.grade);
+        }
+        await API.saveRepetition(updated);
+        render();
+      };
+    });
+  }
+
+  function renderMonth() {
+    const year = current.getFullYear();
+    const month = current.getMonth();
+    const first = new Date(year, month, 1);
+    const startDay = (first.getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    let html = `<div class="calendar-grid month">`;
+    for (let i = 0; i < startDay; i++) html += `<div class="calendar-day"></div>`;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = new Date(year, month, day).toISOString().slice(0, 10);
+      const items = tasksForDate(dateStr);
+      html += `
+        <div class="calendar-day" data-date="${dateStr}">
+          <div class="calendar-day-head">${day}</div>
+          ${items.map(item => `
+            <div class="calendar-item" data-id="${item.id}" style="background:${areaColor(item.area_id)}">
+              ${item.title}
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+    html += `</div>`;
+    document.getElementById('calendar-root').innerHTML = html;
+
+    document.querySelectorAll('.calendar-item').forEach(el => {
+      el.onclick = () => {
+        const id = el.dataset.id;
+        const task = State.get('tasks').find(t => t.id === id) ||
+          State.get('repetitions').find(r => r.id === id);
+        if (!task) return;
+        const item = task.task_id ? {
+          ...task,
+          title: '🧠 ' + (State.get('tasks').find(t => t.id === task.task_id)?.title || 'Повторение'),
+          isReview: true
+        } : task;
+        openTaskModal(item);
+      };
+    });
+  }
+
+  function render() {
+    renderMonth();
+  }
+
+  document.getElementById('mode-day').onclick = () => alert('Режим дня можно расширить отдельной шкалой времени');
+  document.getElementById('mode-week').onclick = () => alert('Режим недели можно расширить 7-колоночным гридом');
+  document.getElementById('calendar-month').value = `${current.getFullYear()}-${String(current.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('calendar-month').onchange = e => {
+    const [y, m] = e.target.value.split('-').map(Number);
+    current = new Date(y, m - 1, 1);
+    render();
+  };
+
+  render();
+})();
+</script>

@@ -1,0 +1,326 @@
+<div class="page-title">📥 Inbox</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <div class="section-title">Создать с нуля</div>
+    <div id="wizard-alerts" class="col"></div>
+
+    <div class="col">
+      <div>
+        <label>Область</label>
+        <input id="new-area-name" placeholder="Математика" />
+      </div>
+      <div class="grid grid-3">
+        <div>
+          <label>Тип</label>
+          <select id="new-area-type">
+            <option value="study">Учёба</option>
+            <option value="work">Работа</option>
+            <option value="routine">Рутина</option>
+            <option value="daily">Ежедневное</option>
+          </select>
+        </div>
+        <div>
+          <label>Цвет</label>
+          <input id="new-area-color" value="#D4E8FF" />
+        </div>
+        <div>
+          <label>Иконка</label>
+          <input id="new-area-icon" value="📘" />
+        </div>
+      </div>
+
+      <div>
+        <label>Проект нужен?</label>
+        <select id="need-project">
+          <option value="yes">Да</option>
+          <option value="no">Нет</option>
+        </select>
+      </div>
+
+      <div id="project-block">
+        <div>
+          <label>Название проекта</label>
+          <input id="new-project-name" placeholder="Математика для ML" />
+        </div>
+        <div class="grid grid-3">
+          <div>
+            <label>Старт</label>
+            <input id="new-project-start" type="date" />
+          </div>
+          <div>
+            <label>Дедлайн</label>
+            <input id="new-project-end" type="date" />
+          </div>
+          <div>
+            <label>Часов всего</label>
+            <input id="new-project-hours" type="number" min="0" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label>Ветка нужна?</label>
+        <select id="need-branch">
+          <option value="yes">Да</option>
+          <option value="no">Нет</option>
+        </select>
+      </div>
+
+      <div id="branch-block">
+        <div>
+          <label>Название ветки</label>
+          <input id="new-branch-name" placeholder="Линейная алгебра" />
+        </div>
+      </div>
+
+      <div>
+        <label>Быстрый ввод задачи</label>
+        <input id="quick-task" placeholder="Описательная статистика 2ч !high до:2026-06-25 🧠" />
+      </div>
+
+      <button class="btn-primary" id="add-task-preview-btn">Добавить в список</button>
+      <div id="task-preview" class="kanban-list"></div>
+      <button class="btn-primary" id="save-full-wizard">Сохранить всё</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Добавить к существующему</div>
+    <div class="col">
+      <div>
+        <label>Область</label>
+        <select id="existing-area"></select>
+      </div>
+      <div>
+        <label>Проект</label>
+        <select id="existing-project"></select>
+      </div>
+      <div>
+        <label>Ветка</label>
+        <select id="existing-branch"></select>
+      </div>
+      <div>
+        <label>Задача</label>
+        <input id="existing-task-input" placeholder="Проверка гипотез 3ч !medium" />
+      </div>
+      <button class="btn-primary" id="save-existing-task">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <div class="section-title">Ожидающие задачи</div>
+  <div id="pending-tasks"></div>
+</div>
+
+<script>
+(() => {
+  const previewTasks = [];
+
+  function renderExistingOptions() {
+    const areas = State.get('areas');
+    const projects = State.get('projects');
+    const branches = State.get('branches');
+
+    document.getElementById('existing-area').innerHTML =
+      '<option value="">— Выбери область —</option>' +
+      areas.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+
+    document.getElementById('existing-area').onchange = e => {
+      const areaId = e.target.value;
+      document.getElementById('existing-project').innerHTML =
+        '<option value="">— Без проекта —</option>' +
+        projects.filter(p => p.area_id === areaId).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+      document.getElementById('existing-branch').innerHTML = '<option value="">— Без ветки —</option>';
+    };
+
+    document.getElementById('existing-project').onchange = e => {
+      const projectId = e.target.value;
+      document.getElementById('existing-branch').innerHTML =
+        '<option value="">— Без ветки —</option>' +
+        branches.filter(b => b.project_id === projectId).map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+    };
+  }
+
+  function renderPending() {
+    const pending = State.get('tasks').filter(t => t.status === 'inbox');
+    document.getElementById('pending-tasks').innerHTML = pending.length
+      ? pending.map(t => `
+        <div class="task-card">
+          <div class="task-title">${t.title}</div>
+          <div class="task-meta">${t.estimated_hours || 0}ч · ${t.priority}</div>
+        </div>
+      `).join('')
+      : '<div class="muted">Нет ожидающих задач</div>';
+  }
+
+  function pushAlert(type, text) {
+    const el = document.createElement('div');
+    el.className = `inline-alert ${type}`;
+    el.textContent = text;
+    document.getElementById('wizard-alerts').appendChild(el);
+  }
+
+  function clearAlerts() {
+    document.getElementById('wizard-alerts').innerHTML = '';
+  }
+
+  function validateTask(t) {
+    clearAlerts();
+    if (t.date_deadline) {
+      const diff = Math.ceil((new Date(t.date_deadline) - new Date()) / 86400000);
+      if (diff < 0) pushAlert('danger', 'Конфликт дедлайна: дата уже прошла.');
+      if (diff >= 0 && diff <= 3) pushAlert('warn', 'Приближение дедлайна: осталось мало дней.');
+    }
+    if (Number(t.estimated_hours || 0) >= 8) {
+      pushAlert('warn', 'Лучше разбить задачу на меньшие части.');
+    }
+  }
+
+  function renderPreview() {
+    const root = document.getElementById('task-preview');
+    root.innerHTML = previewTasks.map((t, i) => `
+      <div class="task-card">
+        <div class="task-title">${t.title} ${t.remember_flag ? '🧠' : ''}</div>
+        <div class="task-meta">${t.estimated_hours}ч · ${t.priority} · ${t.date_deadline || 'без дедлайна'}</div>
+        <button class="btn-ghost" data-i="${i}">Удалить</button>
+      </div>
+    `).join('');
+
+    root.querySelectorAll('button[data-i]').forEach(btn => {
+      btn.onclick = () => {
+        previewTasks.splice(Number(btn.dataset.i), 1);
+        renderPreview();
+      };
+    });
+  }
+
+  document.getElementById('need-project').onchange = e => {
+    document.getElementById('project-block').classList.toggle('hidden', e.target.value === 'no');
+  };
+
+  document.getElementById('need-branch').onchange = e => {
+    document.getElementById('branch-block').classList.toggle('hidden', e.target.value === 'no');
+  };
+
+  document.getElementById('add-task-preview-btn').onclick = () => {
+    const parsed = Parser.parseQuickTask(document.getElementById('quick-task').value);
+    if (!parsed.title) return;
+    validateTask(parsed);
+    previewTasks.push(parsed);
+    renderPreview();
+    document.getElementById('quick-task').value = '';
+  };
+
+  document.getElementById('save-full-wizard').onclick = async () => {
+    const area = {
+      id: crypto.randomUUID(),
+      name: document.getElementById('new-area-name').value.trim(),
+      type: document.getElementById('new-area-type').value,
+      color: document.getElementById('new-area-color').value,
+      icon: document.getElementById('new-area-icon').value,
+      created_at: new Date().toISOString(),
+      tech_status: 'A'
+    };
+    if (!area.name) return alert('Заполни область');
+
+    await API.saveArea(area);
+
+    let projectId = '';
+    if (document.getElementById('need-project').value === 'yes') {
+      const project = {
+        id: crypto.randomUUID(),
+        area_id: area.id,
+        name: document.getElementById('new-project-name').value.trim(),
+        description: '',
+        date_start: document.getElementById('new-project-start').value,
+        date_end: document.getElementById('new-project-end').value,
+        total_hours: Number(document.getElementById('new-project-hours').value || 0),
+        tech_status: 'A'
+      };
+      if (project.name) {
+        await API.saveProject(project);
+        projectId = project.id;
+      }
+    }
+
+    let branchId = '';
+    if (document.getElementById('need-branch').value === 'yes' && projectId) {
+      const branch = {
+        id: crypto.randomUUID(),
+        project_id: projectId,
+        name: document.getElementById('new-branch-name').value.trim(),
+        description: '',
+        order: 1,
+        tech_status: 'A'
+      };
+      if (branch.name) {
+        await API.saveBranch(branch);
+        branchId = branch.id;
+      }
+    }
+
+    for (const p of previewTasks) {
+      const task = {
+        id: crypto.randomUUID(),
+        area_id: area.id,
+        project_id: projectId,
+        branch_id: branchId,
+        title: p.title,
+        description: '',
+        date_planned: '',
+        date_deadline: p.date_deadline,
+        estimated_hours: p.estimated_hours,
+        actual_hours: 0,
+        status: 'inbox',
+        priority: p.priority,
+        remember_flag: p.remember_flag,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        depends_on: '',
+        milestone_flag: false,
+        tech_status: 'A'
+      };
+      await API.saveTask(task);
+      if (task.remember_flag) {
+        await API.saveRepetition(SRS.createForTask(task.id));
+      }
+    }
+
+    alert('Сохранено');
+    location.hash = '#areas';
+  };
+
+  document.getElementById('save-existing-task').onclick = async () => {
+    const parsed = Parser.parseQuickTask(document.getElementById('existing-task-input').value);
+    const task = {
+      id: crypto.randomUUID(),
+      area_id: document.getElementById('existing-area').value,
+      project_id: document.getElementById('existing-project').value,
+      branch_id: document.getElementById('existing-branch').value,
+      title: parsed.title,
+      description: '',
+      date_planned: '',
+      date_deadline: parsed.date_deadline,
+      estimated_hours: parsed.estimated_hours,
+      actual_hours: 0,
+      status: 'inbox',
+      priority: parsed.priority,
+      remember_flag: parsed.remember_flag,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      depends_on: '',
+      milestone_flag: false,
+      tech_status: 'A'
+    };
+    await API.saveTask(task);
+    if (task.remember_flag) await API.saveRepetition(SRS.createForTask(task.id));
+    alert('Задача добавлена');
+    renderPending();
+  };
+
+  renderExistingOptions();
+  renderPending();
+})();
+</script>

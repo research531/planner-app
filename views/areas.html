@@ -1,0 +1,95 @@
+<div class="page-title">🌐 Области</div>
+<div id="areas-root" class="grid grid-2"></div>
+
+<script>
+(() => {
+  function progressForArea(areaId) {
+    const tasks = State.get('tasks').filter(t => t.area_id === areaId);
+    if (!tasks.length) return 0;
+    const done = tasks.filter(t => t.status === 'done').length;
+    return Math.round(done / tasks.length * 100);
+  }
+
+  function renderTree(area) {
+    const projects = State.get('projects').filter(p => p.area_id === area.id);
+    const looseTasks = State.get('tasks').filter(t => t.area_id === area.id && !t.project_id);
+
+    return `
+      <div class="card area-tile" style="background:${area.color}">
+        <div class="row-between">
+          <div><b>${area.icon || '🌐'} ${area.name}</b></div>
+          <div>${progressForArea(area.id)}%</div>
+        </div>
+        <div class="progress"><span style="width:${progressForArea(area.id)}%"></span></div>
+
+        <div class="tree-node" style="margin-top:12px">
+          ${projects.map(project => {
+            const branches = State.get('branches').filter(b => b.project_id === project.id);
+            const projectTasks = State.get('tasks').filter(t => t.project_id === project.id && !t.branch_id);
+            return `
+              <div class="card" style="margin-top:10px">
+                <div class="row-between">
+                  <div><b>📁 ${project.name}</b></div>
+                  <button class="btn-ghost" data-project="${project.id}">Архивировать</button>
+                </div>
+                ${branches.map(branch => `
+                  <div class="tree-node">
+                    <div><b>🌿 ${branch.name}</b></div>
+                    ${State.get('tasks').filter(t => t.branch_id === branch.id).map(task => `
+                      <div class="task-card">
+                        <div class="task-title">${task.title}</div>
+                        <div class="task-meta">${task.priority} · ${task.status}</div>
+                      </div>
+                    `).join('')}
+                  </div>
+                `).join('')}
+                ${projectTasks.map(task => `
+                  <div class="task-card">
+                    <div class="task-title">${task.title}</div>
+                    <div class="task-meta">${task.priority} · ${task.status}</div>
+                  </div>
+                `).join('')}
+              </div>
+            `;
+          }).join('')}
+
+          ${looseTasks.length ? `
+            <div class="card" style="margin-top:10px">
+              <b>Задачи без проекта</b>
+              ${looseTasks.map(task => `
+                <div class="task-card">
+                  <div class="task-title">${task.title}</div>
+                  <div class="task-meta">${task.priority} · ${task.status}</div>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function render() {
+    const areas = State.get('areas');
+    document.getElementById('areas-root').innerHTML =
+      areas.length ? areas.map(renderTree).join('') : '<div class="card">Областей пока нет</div>';
+
+    document.querySelectorAll('[data-project]').forEach(btn => {
+      btn.onclick = async () => {
+        const project = State.get('projects').find(p => p.id === btn.dataset.project);
+        if (!project) return;
+        await API.saveProject({
+          ...project,
+          prev_id: project.id,
+          id: crypto.randomUUID(),
+          name: project.name + ' [архив]',
+          tech_status: 'A'
+        });
+        render();
+      };
+    });
+  }
+
+  render();
+})();
+</script>

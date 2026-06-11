@@ -1,0 +1,111 @@
+<div class="page-title">⚙️ Настройки</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <div class="section-title">Профиль</div>
+    <div class="col">
+      <div><label>Имя</label><input id="user-name" placeholder="Имя" /></div>
+      <div><label>Аватар URL</label><input id="user-avatar" placeholder="https://..." /></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Тема</div>
+    <div class="row">
+      <button class="btn-secondary" id="set-light">Светлая</button>
+      <button class="btn-secondary" id="set-dark">Тёмная</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Интервалы повторений</div>
+    <div class="col">
+      <label>Формат через запятую</label>
+      <input id="srs-intervals" value="1,3,7,14,30,90" />
+      <button class="btn-primary" id="save-srs">Сохранить</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Google Sheets</div>
+    <div class="col">
+      <label>URL веб-приложения Apps Script</label>
+      <input id="script-url" placeholder="https://script.google.com/macros/s/..." />
+      <button class="btn-primary" id="save-script-url">Сохранить и подключить</button>
+      <button class="btn-secondary" id="reload-from-api">Перезагрузить данные</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Данные</div>
+    <div class="row">
+      <button class="btn-secondary" id="export-json">Экспорт JSON</button>
+      <input type="file" id="import-json-file" />
+      <button class="btn-danger" id="reset-local">Сброс локальных данных</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const settings = State.get('settings');
+  document.getElementById('script-url').value = settings.scriptUrl || '';
+  document.getElementById('srs-intervals').value = (settings.srsIntervals || [1,3,7,14,30,90]).join(',');
+
+  document.getElementById('set-light').onclick = () => State.updateSettings({ theme: 'light' });
+  document.getElementById('set-dark').onclick = () => State.updateSettings({ theme: 'dark' });
+
+  document.getElementById('save-srs').onclick = () => {
+    const intervals = document.getElementById('srs-intervals').value
+      .split(',')
+      .map(x => Number(x.trim()))
+      .filter(Boolean);
+    State.updateSettings({ srsIntervals: intervals });
+    alert('Интервалы сохранены');
+  };
+
+  document.getElementById('save-script-url').onclick = async () => {
+    const url = document.getElementById('script-url').value.trim();
+    State.updateSettings({ scriptUrl: url });
+    await API.loadAll();
+    alert('Подключение выполнено');
+  };
+
+  document.getElementById('reload-from-api').onclick = async () => {
+    await API.loadAll();
+    alert('Данные обновлены');
+  };
+
+  document.getElementById('export-json').onclick = async () => {
+    const data = {
+      areas: State.get('areas'),
+      projects: State.get('projects'),
+      branches: State.get('branches'),
+      tasks: State.get('tasks'),
+      repetitions: State.get('repetitions'),
+      timeBase: State.get('timeBase'),
+      timeExceptions: State.get('timeExceptions'),
+      dailyLog: State.get('dailyLog')
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'planner-export.json';
+    a.click();
+  };
+
+  document.getElementById('import-json-file').onchange = async e => {
+    const file = e.target.files[0];
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    await API.post('importJson', { payload });
+    await API.loadAll();
+    alert('Импорт завершён');
+  };
+
+  document.getElementById('reset-local').onclick = async () => {
+    indexedDB.deleteDatabase('planner-db');
+    alert('Локальные данные сброшены. Перезагрузи страницу.');
+  };
+})();
+</script>
